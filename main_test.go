@@ -1,10 +1,24 @@
 package main
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+	"time"
+)
 
 type KeplerTest struct {
 	Filename string
-	Expect   string
+	Expect   map[string]string
+}
+
+func TestParseTime(t *testing.T) {
+	loc, _ = time.LoadLocation("Europe/Paris")
+	timeToParse := "946684800.0"
+	parsedTime := parseBJD(timeToParse)
+	target := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC).In(loc)
+	if parsedTime != target {
+		t.Errorf("expected '%v', got '%v'", target, parsedTime.String())
+	}
 }
 
 func TestKeplerName(t *testing.T) {
@@ -12,17 +26,18 @@ func TestKeplerName(t *testing.T) {
 	filenames := []KeplerTest{
 		KeplerTest{
 			Filename: "kplr008462852-2013098041711_llc.fits",
-			Expect:   "008462852",
+			Expect:   map[string]string{"id": "008462852", "campagne": "kepler", "catalog": "KIC"},
 		},
 		KeplerTest{
 			Filename: "ktwo246516122-c12_llc.fits",
-			Expect:   "246516122",
+			Expect:   map[string]string{"id": "246516122", "campagne": "ktwo", "catalog": "EPIC"},
 		},
 	}
 
 	for _, filename := range filenames {
-		if getEPICIDFromFilename(filename.Filename) != filename.Expect {
-			t.Errorf("Got '%v', Expect '%v'", getEPICIDFromFilename(filename.Filename), filename.Expect)
+
+		if reflect.DeepEqual(getLabels(filename.Filename), filename.Expect) {
+			t.Errorf("Got '%v', Expect '%v'", getLabels(filename.Filename), filename.Expect)
 		}
 	}
 }

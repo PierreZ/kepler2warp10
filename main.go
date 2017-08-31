@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/csv"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -41,12 +43,7 @@ func main() {
 		}
 		filename := file.Name()
 
-		epicID := getEPICIDFromFilename(filename)
-
-		labels := warp.Labels{
-			"filename": filename,
-			"epic":     epicID,
-		}
+		labels := getLabels(filename)
 
 		gtss, err := parseCSV(*path+"/"+filename, labels)
 		if err != nil {
@@ -59,22 +56,29 @@ func main() {
 			batch.AddGTS(&gts)
 		}
 
-		err = warp.PushBatch(batch, *endpoint, *token)
-		if err != nil {
-			log.Fatalln(err)
+		statuscode := batch.Push(*endpoint, *token)
+		if statuscode != http.StatusOK {
+			panic(fmt.Errorf("warp respond %v, exiting", statuscode))
 		}
 	}
 	log.Println("Done!")
 }
 
-// getEPICIDFromFilename is getting the name of the star based on filename.
+// getLabels is getting the name of the star based on filename.
 //
-func getEPICIDFromFilename(filename string) string {
+func getLabels(filename string) map[string]string {
+	labels := make(map[string]string)
 	head := strings.Split(filename, "-")[0]
 
-	head = strings.Replace(head, "kplr", "", 1)
-	head = strings.Replace(head, "ktwo", "", 1)
-	return head
+	labels["campagne"] = head[0:3]
+	labels["id"] = head[3:]
+	switch labels["campagne"] {
+	case "kepler":
+		labels["catalog"] = "KIC"
+	case "ktwo":
+		labels["catalog"] = "EPIC"
+	}
+	return labels
 }
 
 func parseCSV(path string, labels warp.Labels) (map[int]warp.GTS, error) {
@@ -139,7 +143,15 @@ func parseCSV(path string, labels warp.Labels) (map[int]warp.GTS, error) {
 
 // TODO parse BJD or at leat an approximation
 func parseBJD(timestr string) time.Time {
-	return time.Now()
+
+	// Removing trailing . and number
+	timestr = strings.Split(timestr, ".")[0]
+
+	i, err := strconv.ParseInt(timestr, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	return time.Unix(i, 0)
 }
 
 func parseValue(column string) float64 {
