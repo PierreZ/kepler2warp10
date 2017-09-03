@@ -53,13 +53,14 @@ func main() {
 		batch := warp.NewBatch()
 
 		for _, gts := range gtss {
-			batch.AddGTS(&gts)
+			batch.Register(&gts)
 		}
 
 		statuscode := batch.Push(*endpoint, *token)
 		if statuscode != http.StatusOK {
 			panic(fmt.Errorf("warp respond %v, exiting", statuscode))
 		}
+		log.Println("data pushed!")
 	}
 	log.Println("Done!")
 }
@@ -70,8 +71,8 @@ func getLabels(filename string) map[string]string {
 	labels := make(map[string]string)
 	head := strings.Split(filename, "-")[0]
 
-	labels["campagne"] = head[0:3]
-	labels["id"] = head[3:]
+	labels["campagne"] = head[0:4]
+	labels["id"] = head[4:]
 	switch labels["campagne"] {
 	case "kepler":
 		labels["catalog"] = "KIC"
@@ -95,8 +96,6 @@ func parseCSV(path string, labels warp.Labels) (map[int]warp.GTS, error) {
 
 	for i, line := range records {
 
-		//log.Printf("line=%+v, i=%v\n", line, i)
-
 		for j, column := range line {
 			if j == 0 {
 				// First column must be TIME
@@ -107,8 +106,6 @@ func parseCSV(path string, labels warp.Labels) (map[int]warp.GTS, error) {
 				continue
 			}
 
-			//log.Printf("column=%+v, j=%v\n", column, j)
-
 			if i == 0 {
 				// Create GTS
 				if len(column) == 0 {
@@ -116,11 +113,10 @@ func parseCSV(path string, labels warp.Labels) (map[int]warp.GTS, error) {
 				}
 				classname := "kepler."
 				column = strings.ToLower(column)
-				column = strings.Replace(column, "_", ".", 1)
+				column = strings.Replace(column, "_", ".", -1)
 				classname += column
 
 				// New GTS
-				log.Println(classname)
 				gts := warp.NewGTS(classname).WithLabels(labels)
 				gtss[j] = *gts
 				//log.Println(classname+" GTS added at index ", j)
@@ -128,14 +124,14 @@ func parseCSV(path string, labels warp.Labels) (map[int]warp.GTS, error) {
 			} else {
 				// GTS exists
 				ts := parseBJD(line[0])
-				value := parseValue(column)
+
+				value := parseScientificValue(column)
 				gts := gtss[j]
 				gts.AddDatapoint(ts, value)
 				gtss[j] = gts
 			}
 
 		}
-
 	}
 
 	return gtss, nil
@@ -144,24 +140,29 @@ func parseCSV(path string, labels warp.Labels) (map[int]warp.GTS, error) {
 // TODO parse BJD or at leat an approximation
 func parseBJD(timestr string) time.Time {
 
-	// Removing trailing . and number
-	timestr = strings.Split(timestr, ".")[0]
-
-	i, err := strconv.ParseInt(timestr, 10, 64)
-	if err != nil {
-		panic(err)
-	}
-	return time.Unix(i, 0)
+	return time.Unix(int64(parseScientificValue(timestr)), 0)
 }
 
-func parseValue(column string) float64 {
-	f, err := strconv.ParseFloat(column, 64)
+func parseScientificValue(s string) (f float64) {
+
+	split := strings.Split(s, "e")
+	f, err := strconv.ParseFloat(split[0], 64)
 	if err != nil {
 		panic(err)
 	}
+	// handling "e(+|-)"
+	if len(split) == 2 {
+		exp, _ := strconv.ParseFloat(split[1][1:], 64)
+		if split[1][0:1] == "-" {
+			f *= -1
+		}
+		for j := 0; j < int(exp); j++ {
+			f *= 10
+		}
+	}
+
 	return f
 }
-
 func contains(s []string, e string) bool {
 	for _, a := range s {
 		if strings.ToLower(a) == e {
