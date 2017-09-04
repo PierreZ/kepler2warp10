@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -62,7 +64,29 @@ func main() {
 		}
 		log.Println("data pushed!")
 	}
-	log.Println("Done!")
+	log.Println("Done! Cleaning...")
+	err = RemoveContents(*path)
+	log.Println("Cleaning done!")
+
+}
+
+func RemoveContents(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // getLabels is getting the name of the star based on filename.
