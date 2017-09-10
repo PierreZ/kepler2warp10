@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"encoding/csv"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -58,9 +56,9 @@ func main() {
 			batch.Register(&gts)
 		}
 
-		statuscode := batch.Push(*endpoint, *token)
-		if statuscode != http.StatusOK {
-			panic(fmt.Errorf("warp respond %v, exiting", statuscode))
+		err = batch.Push(*endpoint, *token)
+		if err != nil {
+			panic(err)
 		}
 		log.Println("data pushed!")
 	}
