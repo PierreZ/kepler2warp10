@@ -7,12 +7,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	warp "github.com/PierreZ/Warp10Exporter"
+	"github.com/howeyc/fsnotify"
 )
 
 var path = flag.String("path", "", "path for csv files")
@@ -20,6 +20,7 @@ var token = flag.String("token", "write", "write token for Warp10")
 var endpoint = flag.String("endpoint", "http://localhost:8080", "full warp10 endpoint address [proto]:[endpoint]:[port]")
 
 func main() {
+
 	flag.Parse()
 
 	if len(*path) == 0 {
@@ -32,59 +33,66 @@ func main() {
 		log.Fatal("endpoint not set")
 	}
 
-	files, err := ioutil.ReadDir(*path)
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, file := range files {
-		if !strings.Contains(file.Name(), ".csv") {
-			continue
+	done := make(chan bool)
+
+	// Process events
+	go func() {
+		for {
+			select {
+			case ev := <-watcher.Event:
+				if ev.IsCreate() {
+					go push(ev.Name)
+				}
+			case err := <-watcher.Error:
+				log.Fatalln("error:", err)
+				done <- true
+			}
 		}
-		filename := file.Name()
+	}()
 
-		labels := getLabels(filename)
-
-		gtss, err := parseCSV(*path+"/"+filename, labels)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		batch := warp.NewBatch()
-
-		for _, gts := range gtss {
-			batch.Register(&gts)
-		}
-
-		err = batch.Push(*endpoint, *token)
-		if err != nil {
-			panic(err)
-		}
-		log.Println("data pushed!")
+	err = watcher.Watch(*path)
+	if err != nil {
+		log.Fatal(err)
 	}
-	log.Println("Done! Cleaning...")
-	err = RemoveContents(*path)
-	log.Println("Cleaning done!")
 
+	// Hang so program doesn't exit
+	<-done
+
+	/* ... do stuff ... */
+	watcher.Close()
 }
 
-func RemoveContents(dir string) error {
-	d, err := os.Open(dir)
+func push(filename string) {
+	if !strings.Contains(filename, ".csv") {
+		return
+	}
+
+	labels := getLabels(filename)
+	gtss, err := parseCSV(filename, labels)
 	if err != nil {
-		return err
+		log.Fatalln(err)
 	}
-	defer d.Close()
-	names, err := d.Readdirnames(-1)
+
+	batch := warp.NewBatch()
+
+	for _, gts := range gtss {
+		batch.Register(&gts)
+	}
+	err = batch.Push(*endpoint, *token)
 	if err != nil {
-		return err
+		log.Fatalln(err)
 	}
-	for _, name := range names {
-		err = os.RemoveAll(filepath.Join(dir, name))
-		if err != nil {
-			return err
-		}
+
+	log.Println("data pushed!")
+	err = os.Remove(filename)
+	if err != nil {
+		log.Fatalln(err)
 	}
-	return nil
 }
 
 // getLabels is getting the name of the star based on filename.

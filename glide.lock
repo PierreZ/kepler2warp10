@@ -1,0 +1,8 @@
+hash: 497756a25e7072983ec04df8ab32183f23da137e8bdd146ba98d36575c797fbb
+updated: 2017-09-18T22:20:25.993390068+02:00
+imports:
+- name: github.com/howeyc/fsnotify
+  version: 441bbc86b167f3c1f4786afae9931403b99fdacf
+- name: github.com/PierreZ/Warp10Exporter
+  version: 9a2bc0468071fb1969c611ad8f1fc7fbfdb83221
+testImports: []

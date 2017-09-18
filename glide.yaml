@@ -1,0 +1,5 @@
+package: github.com/PierreZ/kepler2warp10
+import:
+- package: github.com/PierreZ/Warp10Exporter
+- package: github.com/howeyc/fsnotify
+  version: ^0.9.0
